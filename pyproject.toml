@@ -1,0 +1,46 @@
+[build-system]
+requires = [
+    "setuptools >= 65",
+    "wheel >= 0.38",
+]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+
+[project]
+name = "pylpa"
+version = "0.0.0"
+authors = [{ name = "Bruno Spilak", email = "bruno.spilak@gmail.com" }]
+description = "Local Parametric Approach Python implementation"
+readme = "README.md"
+classifiers = [
+	"Programming Language :: Python :: 3",
+	"Operating System :: OS Independent",
+]
+requires-python = ">=3.11"
+dependencies = [
+    "coloredlogs>=15.0.1",
+]
+
+[project.optional-dependencies]
+dev = ["pre-commit", "black", "isort", "pytest"]
+
+[tool.black]
+line-length = 79
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+    \.git
+  | \.idea
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+)/
+'''
