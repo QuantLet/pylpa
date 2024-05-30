@@ -1,13 +1,16 @@
-import pandas as pd
 import numpy as np
 import random, scipy
-import statsmodels.tsa.api as smt
-import statsmodels.api as sm
-import matplotlib.pyplot as plt
 from statsmodels.tsa.arima_model import ARMA
 from arch.univariate import ZeroMean, ARCH, GARCH
 from functools import partial
-from surrogate.garch.constraint import *
+from pylpa.garch.constraint import (
+    cstr_omega,
+    cstr_alpha,
+    cstr_beta,
+    cstr_alpha_beta
+)
+from decimal import Decimal
+
 import warnings
 
 
@@ -165,33 +168,6 @@ def generate_data(omega1=0.2, a1=0.2, b1=0.1, n1=100, omega2=1, a2=0.2, b2=0.7, 
     sigsq = np.concatenate([sigsq1, sigsq2, sigsq1, sigsq2, sigsq1, sigsq2])
 
     return Y, sigsq
-
-
-def tsplot(y, lags=None, figsize=(10, 8), style='bmh'):
-    if not isinstance(y, pd.Series):
-        y = pd.Series(y)
-    with plt.style.context(style):
-        fig = plt.figure(figsize=figsize)
-        # mpl.rcParams['font.family'] = 'Ubuntu Mono'
-        layout = (3, 2)
-        ts_ax = plt.subplot2grid(layout, (0, 0), colspan=2)
-        acf_ax = plt.subplot2grid(layout, (1, 0))
-        pacf_ax = plt.subplot2grid(layout, (1, 1))
-        qq_ax = plt.subplot2grid(layout, (2, 0))
-        pp_ax = plt.subplot2grid(layout, (2, 1))
-
-        y.plot(ax=ts_ax)
-        ts_ax.set_title('Time Series Analysis Plots')
-        smt.graphics.plot_acf(y, lags=lags, ax=acf_ax, alpha=0.5)
-        smt.graphics.plot_pacf(y, lags=lags, ax=pacf_ax, alpha=0.5)
-        sm.qqplot(y, line='s', ax=qq_ax)
-        qq_ax.set_title('QQ Plot')
-        scipy.stats.probplot(y, sparams=(y.mean(), y.std()), plot=pp_ax)
-
-        plt.tight_layout()
-    plt.show()
-
-    return
 
 
 def garch_process(n, omega, a1, b1=0, y0=0.001, sigsq0=0.001):
@@ -494,10 +470,11 @@ def sup_estimator(A_data, A_weight, B_data, B_weight, start_value, A_mle, B_mle,
 
     def objective(theta):
         bias_theta = theta + B_mle - A_mle
-        return (negative_loglikelihood(A_data, theta, arma, weights=A_weight) + negative_loglikelihood(B_data,
-                                                                                                       bias_theta,
-                                                                                                       arma,
-                                                                                                       weights=B_weight))
+        return (
+                negative_loglikelihood(A_data, theta, arma, weights=A_weight) +
+                negative_loglikelihood(
+                    B_data, bias_theta, arma, weights=B_weight)
+        )
 
     result = scipy.optimize.minimize(objective,
                                      start_value,

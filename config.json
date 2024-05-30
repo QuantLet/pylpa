@@ -1,22 +1,12 @@
 {
-  "mpath": "saved_models_another/26042020-112001-q_10_normalization_woneday_input_24_multiple_ROCP_deep",
   "model": {
-    "name": "carlInd",
-    "params": {
-      "Q": 0.2,
-      "distribution": "Bernoulli"
-    }
+    "name": "garch"
   },
-  "comments": "every_5_break_4",
   "generate": "exponential",
-  "num_sim": 10,
-  "njobs": 4,
-  "min_steps": 4,
+  "num_sim": 100,
+  "njobs": 8,
+  "min_steps": 2,
   "max_trial": 1,
-  "seed": 2378,
-  "max_iter": 200,
-  "search_every": 5,
-  "test": false,
-  "cv_split": 1,
-  "output_dir": "saved_result"
+  "search_every": 1,
+  "maxiter": 300
 }

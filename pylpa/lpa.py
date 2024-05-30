@@ -1,4 +1,5 @@
 import time
+from typing import List, Optional
 
 from pylpa.logger import LOGGER
 
@@ -32,8 +33,10 @@ def one_bootstrap_test(i, A_k, B_k, MLE_A, MLE_B, max_trial, model_name, method,
     else:
         raise ValueError
 
-    MLE_A_b, A_success = get_boot_estimator(A_k, weights_A, max_trial, model_name, start_value=start_value,
-                                            model_kwargs=model_kwargs, **kwargs) # method=method, bounds=bounds, options=options)
+    MLE_A_b, A_success = get_boot_estimator(
+        A_k, weights_A, max_trial, model_name, start_value=start_value,
+        model_kwargs=model_kwargs, **kwargs
+    ) # method=method, bounds=bounds, options=options)
     LL_MLE_A_b = - 1.0 * MLE_A_b.fun  # -1 since we minimized negative log likelihood
 
     if not A_success:
@@ -42,8 +45,10 @@ def one_bootstrap_test(i, A_k, B_k, MLE_A, MLE_B, max_trial, model_name, method,
         LOGGER.warning(MLE_A_b.message)
         LOGGER.warning('LL value: %s' % str(- np.round(MLE_A_b.fun, 2)))
 
-    MLE_B_b, B_success = get_boot_estimator(B_k, weights_B, max_trial, model_name, start_value=start_value,
-                                            model_kwargs=model_kwargs, **kwargs)
+    MLE_B_b, B_success = get_boot_estimator(
+        B_k, weights_B, max_trial, model_name, start_value=start_value,
+        model_kwargs=model_kwargs, **kwargs
+    )
     LL_MLE_B_b = - 1.0 * MLE_B_b.fun  # -1 since we minimized negative log likelihood
     if not B_success:
         LL_MLE_B_b = np.nan
@@ -66,16 +71,21 @@ def one_bootstrap_test(i, A_k, B_k, MLE_A, MLE_B, max_trial, model_name, method,
     return T_k_b
 
 
-def test_one_interval(k, data, model_name, n_ks=None, T=None, num_sim=2, min_steps=4, multiplier=1.20, n_0=60,
-                      level=0.95, max_trial=10,
-                      save_dir=None, generate='normal', njobs=80, solver='SLSQP', maxiter=100, mean_std_norm=False, **kwargs):
+def test_one_interval(
+        k: int, data: np.ndarray, model_name: str, n_ks: Optional[List] = None,
+        T=None, num_sim: int = 2, min_steps: int = 4,
+        level: float = 0.95, max_trial: int = 10,
+        save_dir: Optional[str] = None, generate: str = 'normal',
+        njobs: int = 80, solver: str = 'SLSQP', maxiter: int = 100,
+        mean_std_norm: bool = False, **kwargs
+):
     """
     :param k: interval index
     :param data: data
+    :param model_name
+    :param n_ks: length of intervals to test
     :param num_sim: bootstrap simulation
     :param min_steps: min distance between two break point test
-    :param multiplier: interval length multiplier
-    :param n_0: minimum homogeneity length
     :param level: critical value level
     :param max_trial: maximum attempts to estimate MLE
     :return: dict
@@ -84,45 +94,39 @@ def test_one_interval(k, data, model_name, n_ks=None, T=None, num_sim=2, min_ste
     assert T is not None
     assert T <= len(data)
 
+    # Get bounds for the optimization
     if model_name in ["arch", "garch"]:
         if solver == 'SLSQP':
             garch = kwargs['garch']
             arma = kwargs['arma']
             if garch:
-                bounds = get_bounds((data-np.mean(data))/np.std(data), arma=arma) if mean_std_norm else get_bounds(data, arma=arma)
+                bounds = get_bounds(
+                    (data-np.mean(data))/np.std(data), arma=arma
+                ) if mean_std_norm else get_bounds(data, arma=arma)
             else:
-                bounds = get_bounds((data-np.mean(data))/np.std(data), q=0, arma=arma) if mean_std_norm else get_bounds(data, q=0, arma=arma)
-        if garch:
-            p = 1
-            q = 1
-        else:
-            p = 1
-            q = 0
+                bounds = get_bounds(
+                    (data-np.mean(data))/np.std(data), q=0, arma=arma
+                ) if mean_std_norm else get_bounds(data, q=0, arma=arma)
+        # if garch:
+        #     p = 1
+        #     q = 1
+        # else:
+        #     p = 1
+        #     q = 0
     else:
         bounds = None
 
     result_test = {}
     t0_k = time.time()
-    # started from 1 because 0th interval already homogeneous and K+1 because last point is not inclusive
+    # started from 1 because 0th interval already homogeneous and K+1
+    # because last point is not inclusive
     LOGGER.info('Interval nb %s' % k)
     LOGGER.info('T is: %s' % T)
 
     n_k_minus1 = n_ks[0]
     n_k = n_ks[1]
     n_k_plus1 = n_ks[2]
-
-    """
-    n_k = np.int(np.round(n_0 * multiplier ** k))
-    n_k_plus1 = np.int(n_0 * multiplier ** (k + 1))
-    """
     assert n_k_plus1 > n_k
-
-    """
-    if k > 0:
-        n_k_minus1 = np.int(np.round(n_0 * multiplier ** (k - 1)))
-    else:
-        n_k_minus1 = n_0
-    """
 
     if T - n_k >= 0:
         start_k = T - n_k
@@ -140,23 +144,15 @@ def test_one_interval(k, data, model_name, n_ks=None, T=None, num_sim=2, min_ste
 
     I_k = data[start_k:T]
     I_k_plus1 = data[start_k_plus1:T]
-
     if mean_std_norm:
         I_k = (I_k-np.mean(I_k)) / np.std(I_k)
         I_k_plus1 = (I_k_plus1-np.mean(I_k_plus1)) / np.std(I_k_plus1)
 
-
-    #print(I_k)
-    #print(I_k.shape)
-    #print(I_k_plus1.shape)
-    #exit()
-    # start_value = starting_values(I_k_plus1, p=p, q=q)
-
-    # start_value = starting_values(I_k_plus1, garch=garch, arma=arma)
     start_value = get_starting_values(I_k_plus1, model_name, **kwargs)
-    MLE_I_k_plus1 = get_mle_estimator(I_k_plus1, start_value, model_name, maxiter, solver=solver, bounds=bounds,
-                                      **kwargs)
-
+    MLE_I_k_plus1 = get_mle_estimator(
+        I_k_plus1, start_value, model_name, maxiter, solver=solver,
+        bounds=bounds, **kwargs
+    )
     assert start_k < T - n_k_minus1
     J_k = range(start_k, T - n_k_minus1)
     J_k = np.array(list(J_k))[list(range(0, len(J_k), min_steps))]
@@ -172,30 +168,35 @@ def test_one_interval(k, data, model_name, n_ks=None, T=None, num_sim=2, min_ste
         A_k = data[start_k_plus1:(s + 1)]
         B_k = data[s + 1:T]
 
+        print(len(A_k), len(B_k))
         # Estimator
         start_value = get_starting_values(I_k, model_name, **kwargs)
-        MLE_A = get_mle_estimator(A_k, start_value, model_name, maxiter, solver=solver, bounds=bounds, **kwargs)
-
+        MLE_A = get_mle_estimator(
+            A_k, start_value, model_name, maxiter, solver=solver,
+            bounds=bounds, **kwargs
+        )
         start_value = get_starting_values(I_k, model_name, **kwargs)
-        MLE_B = get_mle_estimator(B_k, start_value, model_name, maxiter, solver=solver, bounds=bounds, **kwargs)
-
+        MLE_B = get_mle_estimator(
+            B_k, start_value, model_name, maxiter, solver=solver,
+            bounds=bounds, **kwargs
+        )
         # test statistic
         T_k[counter] = -1.0 * (
                 MLE_A.fun + MLE_B.fun - MLE_I_k_plus1.fun)  # -1 since we minimized negative log likelihood
 
         # Run bootstrapt tests
         start_value = get_starting_values(np.concatenate([A_k, B_k]), model_name, **kwargs)
-
         def runner(i):
-            return one_bootstrap_test(i, A_k, B_k, MLE_A, MLE_B, max_trial, model_name, solver, bounds, {'maxiter': maxiter},
-                                      start_value=start_value, model_kwargs=kwargs, generate=generate)
+            return one_bootstrap_test(
+                i, A_k, B_k, MLE_A, MLE_B, max_trial, model_name, solver,
+                bounds, {'maxiter': maxiter}, start_value=start_value,
+                model_kwargs=kwargs, generate=generate
+            )
+        # results = []
+        # for i in range(num_sim):
+        #     r = runner(i)
+        #     results.append(r)
         results = Parallel(n_jobs=njobs)(delayed(runner)(i) for i in range(num_sim))
-
-        """
-        results = []
-        for i in range(num_sim):
-            results.append(runner(i))
-        """
         T_k_b[counter, :] = results
 
     t1b = time.time()
@@ -221,12 +222,18 @@ def test_one_interval(k, data, model_name, n_ks=None, T=None, num_sim=2, min_ste
         I_window = data[index:T]
         start_value = get_starting_values(I_window, model_name, **kwargs)
 
-        MLE_window = get_mle_estimator(I_window, start_value, model_name, maxiter, solver=solver, bounds=bounds, **kwargs)
+        MLE_window = get_mle_estimator(
+            I_window, start_value, model_name, maxiter, solver=solver,
+            bounds=bounds, **kwargs
+        )
         window = len(I_window)
         scaled_window = len(I_window) / T
     else:
         start_value = get_starting_values(I_k, model_name, **kwargs)
-        MLE_window = get_mle_estimator(I_k, start_value, model_name, maxiter, solver=solver, bounds=bounds, **kwargs)
+        MLE_window = get_mle_estimator(
+            I_k, start_value, model_name, maxiter, solver=solver,
+            bounds=bounds, **kwargs
+        )
         window = len(I_k)
         scaled_window = len(I_k) / T
 

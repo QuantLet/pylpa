@@ -67,7 +67,7 @@ def get_boot_estimator(data, weights, max_iter, model_name, start_value=None, mo
             if start_value is None:
                 start_value = get_starting_values(data, model_name, arch=garch, arma=arma)
             result = mle_estimator(data, start_value, arma=arma, weights=weights, **kwargs)
-            if result.message == "Optimization terminated successfully.":
+            if result.message == "Optimization terminated successfully":
                 success = True
             if iter_ > max_iter:
                 break
@@ -90,7 +90,7 @@ def get_sup_estimator(A_data, A_weights, B_data, B_weights, A_mle, B_mle, max_it
                 start_value = starting_values(np.concatenate([A_data, B_data]), garch=garch, arma=arma)
             start_value = get_start_value(start_value, A_mle, B_mle, arma)
             result = sup_estimator(A_data, A_weights, B_data, B_weights, start_value, A_mle, B_mle, arma=arma, **kwargs)
-            if result.message == "Optimization terminated successfully.":
+            if result.message == "Optimization terminated successfully":
                 success = True
             if iter_ > max_iter:
                 break
