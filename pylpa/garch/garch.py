@@ -159,15 +159,16 @@ def get_max_k(multiplier, n_0, T):
     return max_k
 
 
-def generate_data(omega1=0.2, a1=0.2, b1=0.1, n1=100, omega2=1, a2=0.2, b2=0.7, n2=50, n0=150):
+def generate_data(omega1=0.2, a1=0.2, b1=0.1, n1=100, omega2=1, a2=0.2, b2=0.7,
+                  n2=50):
     # Simulating a GARCH(1, 1) process
     Y1, sigsq1 = garch_process(n1, omega1, a1, b1)
     Y2, sigsq2 = garch_process(n2, omega2, a2, b2)
-    Y0, sigsq2 = garch_process(n0, omega2, a2, b2)
-    Y = np.concatenate([Y1, Y2, Y1, Y2, Y1, Y2, Y0])
+    Y = np.concatenate([Y1, Y2, Y1, Y2, Y1, Y2])
     sigsq = np.concatenate([sigsq1, sigsq2, sigsq1, sigsq2, sigsq1, sigsq2])
-
-    return Y, sigsq
+    breakpoints = [n1, n1 + n2, 2 * n1 + n2, 2 * (n1 + n2), 3 * n1 + 2 * n2,
+                   3 * (n1 + n2)]
+    return Y, sigsq, breakpoints
 
 
 def garch_process(n, omega, a1, b1=0, y0=0.001, sigsq0=0.001):
@@ -178,7 +179,8 @@ def garch_process(n, omega, a1, b1=0, y0=0.001, sigsq0=0.001):
     y[0] = y0
 
     for i in range(1, n):
-        sigsq[i] = Decimal(omega) + Decimal(a1) * Decimal(y[i - 1] ** 2) + Decimal(b1) * Decimal(sigsq[i - 1])
+        sigsq[i] = Decimal(omega) + Decimal(a1) * Decimal(
+            y[i - 1] ** 2) + Decimal(b1) * Decimal(sigsq[i - 1])
         y[i] = Decimal(z[i]) * Decimal(np.sqrt(sigsq[i]))
     y = np.float_(y)
     sigsq = np.float_(sigsq)
@@ -196,7 +198,8 @@ def garch_forecast(y, sigsq, omega, a, b=0):
     sigsq_hat = np.zeros_like(y)
 
     for i in range(1, n):
-        sigsq_hat[i] = Decimal(omega) + Decimal(a) * Decimal(y[i - 1] ** 2) + Decimal(b) * Decimal(sigsq[i - 1])
+        sigsq_hat[i] = Decimal(omega) + Decimal(a) * Decimal(
+            y[i - 1] ** 2) + Decimal(b) * Decimal(sigsq[i - 1])
         yhat[i] = Decimal(z[i]) * Decimal(np.sqrt(sigsq_hat[i]))
     yhat = np.float_(yhat)
     sigsq_hat = np.float_(sigsq_hat)
@@ -230,7 +233,8 @@ def compute_squared_sigmas(Y, initial_sigma, theta, mu=0.):
     prev_Y = np.std(Y[:, 0])
 
     for t in range(T):
-        ssq = Decimal(omega) + Decimal(alpha) * Decimal((prev_Y - mu) ** 2) + Decimal(beta) * Decimal(prev_sigma)
+        ssq = Decimal(omega) + Decimal(alpha) * Decimal(
+            (prev_Y - mu) ** 2) + Decimal(beta) * Decimal(prev_sigma)
         sigma2[t] = bounds_check(np.float_(ssq), var_bounds[t])
         prev_Y = Y[t, 0]
         prev_sigma = sigma2[t]
@@ -268,10 +272,11 @@ def compute_residuals_sigmas(Y, initial_sigma, theta):
 
     for t in range(T):
         residuals[t] = Y[t, 0] - c - a * prev_Y - b * prev_e
-        warnings.filterwarnings("error")
+        # warnings.filterwarnings("error")
         try:
             ssq = np.float_(
-                Decimal(omega) + Decimal(alpha) * Decimal(prev_e ** 2) + Decimal(beta) * Decimal(prev_sigma2))
+                Decimal(omega) + Decimal(alpha) * Decimal(
+                    prev_e ** 2) + Decimal(beta) * Decimal(prev_sigma2))
         except RuntimeWarning:
             print(t, omega, alpha, prev_e, beta, prev_sigma2)
 
@@ -285,11 +290,12 @@ def compute_residuals_sigmas(Y, initial_sigma, theta):
 
 
 # Likelihood
-def loglikelihood(residuals, sigma2):
-    return - 0.5 * (np.log(2 * np.pi) + np.log(sigma2) + residuals ** 2.0 / sigma2)
+def garch_loglikelihood(residuals, sigma2):
+    return - 0.5 * (
+                np.log(2 * np.pi) + np.log(sigma2) + residuals ** 2.0 / sigma2)
 
 
-def negative_loglikelihood(Y, theta, arma=False, weights=None):
+def garch_negative_loglikelihood(Y, theta, arma=False, weights=None):
     T = len(Y)
     # Estimate initial sigma squared
     initial_sigma = np.std(Y)  # np.sqrt(np.mean(Y ** 2))
@@ -307,9 +313,12 @@ def negative_loglikelihood(Y, theta, arma=False, weights=None):
     assert np.sum([s > 0 for s in sigma2]) == len(sigma2)
     # compute
     if weights is None:
-        negll = - 1.0 * sum([loglikelihood(residuals[t], sigma2[t]) for t in range(T)])
+        negll = - 1.0 * sum(
+            [garch_loglikelihood(residuals[t], sigma2[t]) for t in range(T)])
     else:
-        negll = - 1.0 * sum([weights[t] * loglikelihood(residuals[t], sigma2[t]) for t in range(T)])
+        negll = - 1.0 * sum(
+            [weights[t] * garch_loglikelihood(residuals[t], sigma2[t]) for t in
+             range(T)])
 
     return negll
 
@@ -335,9 +344,11 @@ def get_start_value(start_theta, A_theta, B_theta, arma=False):
 
     if arma:
         if len(start_theta) == 6:
-            start_theta = start_theta[0], start_theta[1], start_theta[2], omega, alpha, beta
+            start_theta = start_theta[0], start_theta[1], start_theta[
+                2], omega, alpha, beta
         elif len(start_theta) == 5:
-            start_theta = start_theta[0], start_theta[1], start_theta[2], omega, alpha
+            start_theta = start_theta[0], start_theta[1], start_theta[
+                2], omega, alpha
         else:
             raise ValueError
     else:
@@ -373,10 +384,13 @@ def generate_start_value(garch=False):
 
 
 # Estimators
-def mle_estimator(data, start_value, arma=False, weights=None, **kwargs):
+def mle_estimator(
+        data: np.ndarray, start_value, arma=False, weights=None, **kwargs
+):
     """
     data: array type
-    start_value: starting value for estimation algo to pass to minize function from scipy
+    start_value: starting value for estimation algo to pass to minimize
+    function from scipy
     """
 
     if not arma:
@@ -401,18 +415,18 @@ def mle_estimator(data, start_value, arma=False, weights=None, **kwargs):
         assert start_value == 5 or start_value == 6
 
     def objective(theta):
-        return negative_loglikelihood(data, theta, arma, weights=weights)
+        return garch_negative_loglikelihood(data, theta, arma, weights=weights)
 
-    result = scipy.optimize.minimize(objective,
-                                     start_value,
-                                     constraints=cons,
-                                     # options={'disp': True}
-                                     **kwargs)
+    # warnings.filterwarnings("ignore", category=RuntimeWarning)
+    result = scipy.optimize.minimize(
+        objective, start_value, constraints=cons, **kwargs
+    )
 
     return result
 
 
-def sup_estimator(A_data, A_weight, B_data, B_weight, start_value, A_mle, B_mle, arma=False, **kwargs):
+def sup_estimator(A_data, A_weight, B_data, B_weight, start_value, A_mle,
+                  B_mle, arma=False, **kwargs):
     if arma:
         i = 3
     else:
@@ -424,14 +438,16 @@ def sup_estimator(A_data, A_weight, B_data, B_weight, start_value, A_mle, B_mle,
     # omega > 0
     if constant[0 + i] <= 0:
         def sup_cstr_omega(theta):
-            return np.array([np.float_(Decimal(theta[0 + i]) + Decimal(constant[0 + i]))])
+            return np.array(
+                [np.float_(Decimal(theta[0 + i]) + Decimal(constant[0 + i]))])
     else:
         def sup_cstr_omega(theta):
             return np.array([np.float_(Decimal(theta[0 + i]))])
     # alpha >= 0
     if constant[1 + i] <= 0:
         def sup_cstr_alpha(theta):
-            return np.array([np.float_(Decimal(theta[1 + i]) + Decimal(constant[1 + i]))])
+            return np.array(
+                [np.float_(Decimal(theta[1 + i]) + Decimal(constant[1 + i]))])
     else:
         def sup_cstr_alpha(theta):
             return np.array([theta[1 + i]])
@@ -445,21 +461,25 @@ def sup_estimator(A_data, A_weight, B_data, B_weight, start_value, A_mle, B_mle,
         # beta >= 0
         if constant[2 + i] <= 0:
             def sup_cstr_beta(theta):
-                return np.array([np.float_(Decimal(theta[2 + i]) + Decimal(constant[2 + i]))])
+                return np.array([np.float_(
+                    Decimal(theta[2 + i]) + Decimal(constant[2 + i]))])
         else:
             def sup_cstr_beta(theta):
                 return np.array([theta[2 + i]])
 
         # stationarity
         # alpha + beta <= 1
-        c_alpha_beta = B_mle[1 + i] - A_mle[1 + i] + B_mle[2 + i] - A_mle[2 + i]
+        c_alpha_beta = B_mle[1 + i] - A_mle[1 + i] + B_mle[2 + i] - A_mle[
+            2 + i]
         if c_alpha_beta >= 0:
             def sup_cstr_alpha_beta(theta):
                 return np.array(
-                    [np.float_(Decimal(1.) - (Decimal(theta[1 + i]) + Decimal(theta[2 + i]) - Decimal(c_alpha_beta)))])
+                    [np.float_(Decimal(1.) - (Decimal(theta[1 + i]) + Decimal(
+                        theta[2 + i]) - Decimal(c_alpha_beta)))])
         else:
             def sup_cstr_alpha_beta(theta):
-                return np.array([np.float_(Decimal(1.) - (Decimal(theta[1 + i]) + Decimal(theta[2 + i])))])
+                return np.array([np.float_(Decimal(1.) - (
+                            Decimal(theta[1 + i]) + Decimal(theta[2 + i])))])
 
         cons_sup = ({'type': 'ineq', 'fun': sup_cstr_alpha_beta},
                     {'type': 'ineq', 'fun': sup_cstr_omega},
@@ -471,8 +491,9 @@ def sup_estimator(A_data, A_weight, B_data, B_weight, start_value, A_mle, B_mle,
     def objective(theta):
         bias_theta = theta + B_mle - A_mle
         return (
-                negative_loglikelihood(A_data, theta, arma, weights=A_weight) +
-                negative_loglikelihood(
+                garch_negative_loglikelihood(A_data, theta, arma,
+                                             weights=A_weight) +
+                garch_negative_loglikelihood(
                     B_data, bias_theta, arma, weights=B_weight)
         )
 
