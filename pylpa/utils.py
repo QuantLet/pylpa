@@ -21,14 +21,34 @@ def generate_garch_data(
     return Y, sigsq, breakpoints
 
 
+def default_bootstrat_config(config: dict):
+    if "bootstrap" not in config:
+        bootstrap = {
+            "generate": "normal",
+            "num_sim": 100,
+            "njobs": 8
+        }
+    else:
+        bootstrap = config["bootstrap"]
+        if "generate" not in bootstrap:
+            bootstrap["generate"] = "normal"
+        if "num_sim" not in bootstrap:
+            bootstrap["num_sim"] = 100
+        if "njobs" not in bootstrap:
+            bootstrap["njobs"] = 8
+
+    return bootstrap
+
+
 def default_config(config: dict):
-    if 'save_k' not in config.keys():
-        config['save_k'] = False
     if 'solver' not in config.keys():
         config['solver'] = 'SLSQP'
     if 'maxiter' not in config.keys():
         config['maxiter'] = 100
-    if 'generate' not in config.keys():
-        config['generate'] = 'normal'
+    if "K" not in config:
+        config["K"] = None
+    if "interval_step" not in config:
+        config["interval_step"] = None
+    config["bootstrap"] = default_bootstrat_config(config)
 
     return config

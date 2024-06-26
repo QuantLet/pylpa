@@ -3,12 +3,17 @@
     "name": "garch",
     "params": {"p":  1, "q":  1}
   },
-  "preprocessing": {
-    "name": "StandardScaler"
+  "data": {
+    "path": "generate",
+    "preprocessing": {
+      "name": "StandardScaler"
+    }
   },
-  "generate": "exponential",
-  "num_sim": 100,
-  "njobs": 8,
+  "bootstrap": {
+    "generate": "exponential",
+    "num_sim": 100,
+    "njobs": 8
+  },
   "min_steps": 5,
   "maxtrial": 1,
   "maxiter": 1000

@@ -8,7 +8,7 @@ from pylpa.models import ARMAGARCH, GARCH, ARCH
 
 def get_mle_estimator(
         model, data: np.ndarray, maxiter: int = 100, solver: str = "SLSQP",
-        weights=None, maxtrial=None, **kwargs
+        weights=None, **kwargs
 ):
     """
 
@@ -17,7 +17,6 @@ def get_mle_estimator(
     :param maxiter:
     :param solver:
     :param weights:
-    :param maxtrial:
     :param kwargs:
     :return:
     """

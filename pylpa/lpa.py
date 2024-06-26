@@ -1,6 +1,7 @@
 import time
 from typing import List, Optional
 
+from pylpa.constant import MULTIPLIER, N_0, MAX_INTERVAL_LENGTH
 from pylpa.logger import LOGGER
 
 import numpy as np
@@ -12,6 +13,9 @@ from pylpa.estimators import (
 )
 import pickle
 from joblib import Parallel, delayed
+
+from pylpa.models.utils import build_model_from_config
+from pylpa.utils import get_max_k
 
 
 def bootstrap_test(
@@ -74,10 +78,10 @@ def bootstrap_test(
 
 def test_interval(
         model, k: int, data: np.ndarray, n_ks: Optional[List] = None,
-        T=None, num_sim: int = 2, min_steps: int = 4,
-        level: float = 0.95, preprocessing = None, max_trial: int = 10,
+        T=None, num_sim: int = 100, min_steps: int = 1,
+        level: float = 0.95, maxtrial: int = 10,
         save_dir: Optional[str] = None, generate: str = 'normal',
-        njobs: int = 80, solver: str = 'SLSQP', maxiter: int = 100, **kwargs
+        njobs: int = 8, solver: str = 'SLSQP', maxiter: int = 100, **kwargs
 ):
     """
     Test whether the interval at n_ks[k] in the data contains a breakpoint.
@@ -89,7 +93,7 @@ def test_interval(
     :param num_sim: bootstrap simulation
     :param min_steps: min distance between two break point test
     :param level: critical value level
-    :param max_trial: maximum attempts to estimate MLE
+    :param maxtrial: maximum attempts to estimate MLE
     :return: dict
     """
 
@@ -167,7 +171,7 @@ def test_interval(
         # Run bootstrapt tests
         def runner(i):
             return bootstrap_test(
-                i, model, A_k, B_k, MLE_A, MLE_B, max_trial, solver=solver,
+                i, model, A_k, B_k, MLE_A, MLE_B, maxtrial, solver=solver,
                 bounds=bounds, maxiter=maxiter, generate=generate
             )
 
@@ -239,3 +243,62 @@ def test_interval(
     k, str(np.round((t1_k - t0_k) / 60, 2))))
 
     return result_test, null_is_true, last_test
+
+
+def generate_interval_indices(
+        N, interval_step: int = None, K: Optional[int] = None):
+    if interval_step is None:
+        if K is None:
+            K = get_max_k(MULTIPLIER, N_0, N)
+        n_ks = [[int(np.round(N_0 * MULTIPLIER ** (k - 1))),
+                 int(np.round(N_0 * MULTIPLIER ** k)),
+                 int(np.round(N_0 * MULTIPLIER ** (k + 1)))] for k in
+                range(1, K)]
+    else:
+        if N + interval_step > MAX_INTERVAL_LENGTH:
+            max_int = MAX_INTERVAL_LENGTH + interval_step
+        else:
+            max_int = N
+        n_ks = list(range(N_0, max_int, interval_step))
+        n_ks = [[n_ks[i - 1], n_ks[i], n_ks[i + 1]] for i in
+                range(1, len(n_ks) - 1)]
+    return n_ks
+
+def find_largest_homogene_interval(
+        data: np.ndarray, model_config: dict,  K: Optional[int] = None,
+        interval_step: Optional[int] = None, num_sim: int = 100,
+        min_steps: int = 1, maxtrial: int = 10, generate: str = 'normal',
+        solver: str = 'SLSQP', maxiter: int = 100,
+        njobs: int = 8, **kwargs):
+    """
+
+    :param data:
+    :param K:
+    :param interval_step: Frequency of test
+    :param kwargs:
+    :return:
+    """
+    # Algo
+    n_ks = generate_interval_indices(
+        len(data), interval_step=interval_step,  K=K
+    )
+    LOGGER.info(f"Create model {model_config['name']}")
+    model = build_model_from_config(model_config)
+
+    LOGGER.info('Find largest window')
+    LOGGER.info('Candidate windows: %s' % n_ks)
+    for k in range(len(n_ks)):
+        res_k, null_is_true, last_test = test_interval(
+            model, k, data, n_ks=n_ks[k],
+            T=len(data), num_sim=num_sim,
+            min_steps=min_steps, maxtrial=maxtrial, njobs=njobs,
+            solver=solver, maxiter=maxiter, generate=generate, **kwargs,
+        )
+        if not null_is_true:
+            index = res_k['J_k'][np.argmax(res_k['T_k'])]
+            LOGGER.info('Break point detected at index: %s' % str(index))
+            LOGGER.info(f"n_ks: {n_ks[k]}")
+            return data[-n_ks[k][1]:], index
+        else:
+            index = np.min(res_k['J_k'])
+            assert index == res_k['J_k'][-1]
