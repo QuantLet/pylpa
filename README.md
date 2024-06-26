@@ -1,6 +1,15 @@
 # pyLPA
 This is a python repository implementing the Local Parametric Approach from Spokoiny, V. (2009a).
 
+# Config
+
+- `min_steps`: int, Mininum distance between two break point test
+- `max_trial`: int, Maximum attempts to estimate MLE
+- `maxiter`: int, Maximum number of iterations to perform to estimate MLE
+- `num_sim`: int, Number of bootstrap simulation
+- `njobs`: int, Number of parallel bootstrap estimation
+- `generate`: str, "exponential" or "normal" distribution of the multiplier 
+  bootstrap weights
 
 *References*
 

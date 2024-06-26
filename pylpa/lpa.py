@@ -1,4 +1,3 @@
-import pdb
 import time
 from typing import List, Optional
 
@@ -6,22 +5,19 @@ from pylpa.logger import LOGGER
 
 import numpy as np
 
-from pylpa.tools import (
+from pylpa.estimators import (
     get_boot_estimator,
-    get_starting_values,
-    get_sup_estimator, get_mle_estimator
+    get_sup_estimator,
+    get_mle_estimator
 )
 import pickle
 from joblib import Parallel, delayed
-from pylpa.garch.garch import get_bounds
 
 
-# Calculating estimators
-def one_bootstrap_test(
-        i, A_k, B_k, MLE_A, MLE_B, max_trial, model_name, method, bounds,
-        options, start_value=None, model_kwargs=None, generate='normal'
+def bootstrap_test(
+        i, model, A_k, B_k, MLE_A, MLE_B, maxtrial, solver: str = "SLSQP",
+        bounds=None, maxiter=100, generate='normal', **kwargs,
 ):
-    kwargs = {'method': method, 'options': options}
     if bounds is not None:
         kwargs['bounds'] = bounds
 
@@ -36,21 +32,19 @@ def one_bootstrap_test(
         raise ValueError
 
     MLE_A_b, A_success = get_boot_estimator(
-        A_k, weights_A, max_trial, model_name, start_value=start_value,
-        model_kwargs=model_kwargs, **kwargs
+        model, A_k, weights_A, maxtrial, **kwargs
     )
     LL_MLE_A_b = - 1.0 * MLE_A_b.fun  # -1 since we minimized negative log likelihood
 
     if not A_success:
         LL_MLE_A_b = np.nan
-        LOGGER.info(
+        LOGGER.warning(
             'Estimation failed on A for simulation nb %s, message:' % str(i))
         LOGGER.warning(MLE_A_b.message)
         LOGGER.warning('LL value: %s' % str(- np.round(MLE_A_b.fun, 2)))
 
     MLE_B_b, B_success = get_boot_estimator(
-        B_k, weights_B, max_trial, model_name, start_value=start_value,
-        model_kwargs=model_kwargs, **kwargs
+        model, B_k, weights_B, maxtrial, **kwargs
     )
     LL_MLE_B_b = - 1.0 * MLE_B_b.fun  # -1 since we minimized negative log likelihood
     if not B_success:
@@ -60,12 +54,10 @@ def one_bootstrap_test(
         LOGGER.warning(MLE_B_b.message)
         LOGGER.warning('LL value: %s' % str(- np.round(MLE_B_b.fun, 2)))
 
-    sup_result, sup_success = get_sup_estimator(A_k, weights_A, B_k, weights_B,
-                                                MLE_A.x, MLE_B.x, max_trial,
-                                                model_name,
-                                                start_value=start_value,
-                                                model_kwargs=model_kwargs,
-                                                **kwargs)
+    sup_result, sup_success = get_sup_estimator(
+        A_k, weights_A, B_k, weights_B, MLE_A.x, MLE_B.x, maxtrial, model,
+        solver=solver, maxiter=maxiter, **kwargs
+    )
 
     LL_sup_result = - 1.0 * sup_result.fun  # -1 since we minimized negative log likelihood
     if not sup_success:
@@ -80,13 +72,12 @@ def one_bootstrap_test(
     return T_k_b
 
 
-def test_one_interval(
-        k: int, data: np.ndarray, model_name: str, n_ks: Optional[List] = None,
+def test_interval(
+        model, k: int, data: np.ndarray, n_ks: Optional[List] = None,
         T=None, num_sim: int = 2, min_steps: int = 4,
-        level: float = 0.95, max_trial: int = 10,
+        level: float = 0.95, preprocessing = None, max_trial: int = 10,
         save_dir: Optional[str] = None, generate: str = 'normal',
-        njobs: int = 80, solver: str = 'SLSQP', maxiter: int = 100,
-        mean_std_norm: bool = False, **kwargs
+        njobs: int = 80, solver: str = 'SLSQP', maxiter: int = 100, **kwargs
 ):
     """
     Test whether the interval at n_ks[k] in the data contains a breakpoint.
@@ -105,27 +96,7 @@ def test_one_interval(
     assert T is not None
     assert T <= len(data)
 
-    # Get bounds for the optimization
-    if model_name in ["arch", "garch"]:
-        if solver == 'SLSQP':
-            garch = kwargs['garch']
-            arma = kwargs['arma']
-            if garch:
-                bounds = get_bounds(
-                    (data - np.mean(data)) / np.std(data), arma=arma
-                ) if mean_std_norm else get_bounds(data, arma=arma)
-            else:
-                bounds = get_bounds(
-                    (data - np.mean(data)) / np.std(data), q=0, arma=arma
-                ) if mean_std_norm else get_bounds(data, q=0, arma=arma)
-        # if garch:
-        #     p = 1
-        #     q = 1
-        # else:
-        #     p = 1
-        #     q = 0
-    else:
-        bounds = None
+    bounds = model.get_bounds(data)
 
     result_test = {}
     t0_k = time.time()
@@ -155,15 +126,17 @@ def test_one_interval(
 
     I_k = data[start_k:T]
     I_k_plus1 = data[start_k_plus1:T]
-    if mean_std_norm:
-        I_k = (I_k - np.mean(I_k)) / np.std(I_k)
-        I_k_plus1 = (I_k_plus1 - np.mean(I_k_plus1)) / np.std(I_k_plus1)
 
-    start_value = get_starting_values(I_k_plus1, model_name, **kwargs)
+    # if preprocessing is not None:
+    #     if preprocessing.get("name") == "StandardScaler":
+    #         I_k = (I_k - np.mean(I_k)) / np.std(I_k)
+    #         I_k_plus1 = (I_k_plus1 - np.mean(I_k_plus1)) / np.std(I_k_plus1)
+
+    model.initial_params = model.estimate_initial_params(I_k_plus1)
     MLE_I_k_plus1 = get_mle_estimator(
-        I_k_plus1, start_value, model_name, maxiter, solver=solver,
-        bounds=bounds, **kwargs
+        model, I_k_plus1, maxiter=maxiter, solver=solver, bounds=bounds,
     )
+
     assert start_k < T - n_k_minus1
     J_k = np.array(range(start_k, T - n_k_minus1, min_steps))[::-1].tolist()
     T_k = np.zeros(len(J_k))
@@ -172,36 +145,30 @@ def test_one_interval(
     t0b = time.time()
     for counter, s in enumerate(J_k):
         LOGGER.info('Break points to go: %s' % str(len(J_k) - counter))
-        print(J_k)
         # New intervals
-        # raise NotImplementedError("Error bere")
         A_k = data[start_k_plus1:(s + 1)]
         B_k = data[s + 1:T]
-        print(len(A_k), len(B_k), start_k_plus1, s, T)
+
         # Estimator
-        start_value = get_starting_values(I_k, model_name, **kwargs)
+        model.initial_params = model.estimate_initial_params(I_k)
         MLE_A = get_mle_estimator(
-            A_k, start_value, model_name, maxiter, solver=solver,
+            model, A_k, maxiter=maxiter, solver=solver,
             bounds=bounds, **kwargs
         )
-        start_value = get_starting_values(I_k, model_name, **kwargs)
         MLE_B = get_mle_estimator(
-            B_k, start_value, model_name, maxiter, solver=solver,
+            model, B_k, maxiter=maxiter, solver=solver,
             bounds=bounds, **kwargs
         )
+
         # test statistic
         T_k[counter] = -1.0 * (
-                MLE_A.fun + MLE_B.fun - MLE_I_k_plus1.fun)  # -1 since we minimized negative log likelihood
+                MLE_A.fun + MLE_B.fun - MLE_I_k_plus1.fun)
 
         # Run bootstrapt tests
-        start_value = get_starting_values(np.concatenate([A_k, B_k]),
-                                          model_name, **kwargs)
-
         def runner(i):
-            return one_bootstrap_test(
-                i, A_k, B_k, MLE_A, MLE_B, max_trial, model_name, solver,
-                bounds, {'maxiter': maxiter}, start_value=start_value,
-                model_kwargs=kwargs, generate=generate
+            return bootstrap_test(
+                i, model, A_k, B_k, MLE_A, MLE_B, max_trial, solver=solver,
+                bounds=bounds, maxiter=maxiter, generate=generate
             )
 
         # results = []
@@ -235,18 +202,18 @@ def test_one_interval(
         index = J_k[np.argmax(T_k)]
         LOGGER.info('Break point detected at index: %s' % str(index))
         I_window = data[index:T]
-        start_value = get_starting_values(I_window, model_name, **kwargs)
 
+        model.initial_params = model.estimate_initial_params(I_window)
         MLE_window = get_mle_estimator(
-            I_window, start_value, model_name, maxiter, solver=solver,
+            model, I_window, maxiter, solver=solver,
             bounds=bounds, **kwargs
         )
         window = len(I_window)
         scaled_window = len(I_window) / T
     else:
-        start_value = get_starting_values(I_k, model_name, **kwargs)
+        model.initial_params = model.estimate_initial_params(I_k)
         MLE_window = get_mle_estimator(
-            I_k, start_value, model_name, maxiter, solver=solver,
+            model, I_k, maxiter, solver=solver,
             bounds=bounds, **kwargs
         )
         window = len(I_k)

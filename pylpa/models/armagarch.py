@@ -15,7 +15,7 @@ class ARMAGARCH:
     :param Q: GARCH Q order
     """
     def __init__(
-            self, y, p=1, q=1, P=1, Q=1,
+            self, p=1, q=1, P=1, Q=1,
     ):
         self.p = p
         self.q = q
@@ -74,3 +74,64 @@ class ARMAGARCH:
         # start_value = {'arma': arma_start_value, 'garch': garch_start_value}
 
         return arma_start_value + garch_start_value
+
+    def constraint_sup(self, A_mle, B_mle):
+        constant = B_mle - A_mle
+
+        # positive variance
+        # omega > 0
+        if constant[3] <= 0:
+            def sup_cstr_omega(theta):
+                return np.array(
+                    [np.float_(
+                        Decimal(theta[3]) + Decimal(constant[3]))])
+        else:
+            def sup_cstr_omega(theta):
+                return np.array([np.float_(Decimal(theta[3]))])
+        # alpha >= 0
+        if constant[4] <= 0:
+            def sup_cstr_alpha(theta):
+                return np.array(
+                    [np.float_(
+                        Decimal(theta[4]) + Decimal(constant[4]))])
+        else:
+            def sup_cstr_alpha(theta):
+                return np.array([theta[4]])
+
+        # arch
+        if len(constant) == 2 or len(constant) == 5:
+            cons_sup = ({'type': 'ineq', 'fun': sup_cstr_omega},
+                        {'type': 'ineq', 'fun': sup_cstr_alpha})
+        # garch
+        elif len(constant) == 3 or len(constant) == 6:
+            # beta >= 0
+            if constant[5] <= 0:
+                def sup_cstr_beta(theta):
+                    return np.array([np.float_(
+                        Decimal(theta[5]) + Decimal(constant[5]))])
+            else:
+                def sup_cstr_beta(theta):
+                    return np.array([theta[5]])
+
+            # stationarity
+            # alpha + beta <= 1
+            c_alpha_beta = B_mle[4] - A_mle[4] + B_mle[5] - A_mle[5]
+            if c_alpha_beta >= 0:
+                def sup_cstr_alpha_beta(theta):
+                    return np.array(
+                        [np.float_(
+                            Decimal(1.) - (Decimal(theta[4]) + Decimal(
+                                theta[5]) - Decimal(c_alpha_beta)))])
+            else:
+                def sup_cstr_alpha_beta(theta):
+                    return np.array([np.float_(Decimal(1.) - (
+                            Decimal(theta[4]) + Decimal(theta[5])))])
+
+            cons_sup = ({'type': 'ineq', 'fun': sup_cstr_alpha_beta},
+                        {'type': 'ineq', 'fun': sup_cstr_omega},
+                        {'type': 'ineq', 'fun': sup_cstr_alpha},
+                        {'type': 'ineq', 'fun': sup_cstr_beta})
+        else:
+            raise ValueError
+
+        return cons_sup

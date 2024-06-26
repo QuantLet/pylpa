@@ -3,7 +3,7 @@ from decimal import Decimal
 import numpy as np
 import arch
 
-from pylpa.logger import LOGGER
+from pylpa.models.arch import ARCH, variance_bounds, bounds_check
 
 
 def starting_values(y, p, q):
@@ -13,62 +13,7 @@ def starting_values(y, p, q):
     return list(res.params.values)
 
 
-def bounds_check(sigma2, var_bounds):
-    DBL_MAX = 10 ^ 6
-
-    if sigma2 < var_bounds[0]:
-        sigma2 = var_bounds[0]
-    elif sigma2 > var_bounds[1]:
-        if sigma2 > DBL_MAX:
-            sigma2 = var_bounds[1] + 1000
-        else:
-            sigma2 = var_bounds[1] + np.log(sigma2 / var_bounds[1])
-    return sigma2
-
-
-def variance_bounds(resids, power=2.0):
-    """
-    Construct loose bounds for conditional variances.
-    These bounds are used in parameter estimation to ensure
-    that the log-likelihood does not produce NaN values.
-    Parameters
-    ----------
-    resids : ndarray
-        Approximate residuals to use to compute the lower and upper bounds
-        on the conditional variance
-    power : float, optional
-        Power used in the model. 2.0, the default corresponds to standard
-        ARCH models that evolve in squares.
-    Returns
-    -------
-    var_bounds : ndarray
-        Array containing columns of lower and upper bounds with the same
-        number of elements as resids
-    """
-    nobs = resids.shape[0]
-
-    tau = min(75, nobs)
-    w = 0.94 ** np.arange(tau)
-    w = w / sum(w)
-    var_bound = np.zeros(nobs)
-    initial_value = w.dot(resids[:tau] ** 2.0)
-    # ewma_recursion(0.94, resids, var_bound, resids.shape[0], initial_value)
-
-    var_bounds = np.vstack((var_bound / 1e6, var_bound * 1e6)).T
-    var = resids.var()
-    min_upper_bound = 1 + (resids ** 2.0).max()
-    lower_bound, upper_bound = var / 1e8, 1e7 * (1 + (resids ** 2.0).max())
-    var_bounds[var_bounds[:, 0] < lower_bound, 0] = lower_bound
-    var_bounds[var_bounds[:, 1] < min_upper_bound, 1] = min_upper_bound
-    var_bounds[var_bounds[:, 1] > upper_bound, 1] = upper_bound
-
-    if power != 2.0:
-        var_bounds **= power / 2.0
-
-    return np.ascontiguousarray(var_bounds)
-
-
-class GARCH:
+class GARCH(ARCH):
     """
 
     :param p: ARCH p order
@@ -77,10 +22,38 @@ class GARCH:
     def __init__(
             self, p: int = 1, q: int = 1, dist: str = "normal"
     ):
-        self.p = p
+        super().__init__(p=p, dist=dist)
+        assert q > 0, "q must be larger than 1"
+        if p + q > 2:
+            raise NotImplementedError("For now only GARCH(1,1) is implemented")
         self.q = q
-        self.dist = dist
-        self.constraints = (
+        self.params_constraints = (
+            # stationary: \alpha + \beta < 1
+            {
+                'type': 'ineq',
+                'fun': lambda x: np.array([
+                    np.float_(Decimal(1.) - Decimal(x[1] + x[2]))
+                ])
+            },
+            # positive variance: \omega > 0
+            {
+                'type': 'ineq',
+                'fun': lambda x: np.array([
+                    np.float_(Decimal(x[0]) - Decimal(1e-6))
+                ])
+            },
+            # \alpha > 0
+            {
+                'type': 'ineq',
+                'fun': lambda x: np.array([x[1]])
+            },
+            # \beta > 0
+            {
+                'type': 'ineq',
+                'fun': lambda x: np.array([x[2]])
+            }
+        )
+        self.sup_constraints = (
             # stationary: \alpha + \beta < 1
             {
                 'type': 'ineq',
@@ -136,6 +109,82 @@ class GARCH:
         return starting_values(y, self.p, self.q)
 
     @staticmethod
+    def constraint_sup(A_mle, B_mle):
+        constant = B_mle - A_mle
+        # positive variance
+        # omega > 0
+        if constant[0] <= 0:
+            def sup_cstr_omega(theta):
+                return np.array(
+                    [np.float_(Decimal(theta[0]) + Decimal(constant[0]))])
+        else:
+            def sup_cstr_omega(theta):
+                return np.array([np.float_(Decimal(theta[0]))])
+        # alpha >= 0
+        if constant[1] <= 0:
+            def sup_cstr_alpha(theta):
+                return np.array(
+                    [np.float_(Decimal(theta[1]) + Decimal(constant[1]))])
+        else:
+            def sup_cstr_alpha(theta):
+                return np.array([theta[1]])
+
+        if len(constant) == 3 or len(constant) == 6:
+            # beta >= 0
+            if constant[2] <= 0:
+                def sup_cstr_beta(theta):
+                    return np.array([np.float_(
+                        Decimal(theta[2]) + Decimal(constant[2]))])
+            else:
+                def sup_cstr_beta(theta):
+                    return np.array([theta[2]])
+
+            # stationarity
+            # alpha + beta <= 1
+            c_alpha_beta = B_mle[1] - A_mle[1] + B_mle[2] - A_mle[2]
+            if c_alpha_beta >= 0:
+                def sup_cstr_alpha_beta(theta):
+                    return np.array(
+                        [np.float_(Decimal(1.) - (Decimal(theta[1]) + Decimal(
+                            theta[2]) - Decimal(c_alpha_beta)))])
+            else:
+                def sup_cstr_alpha_beta(theta):
+                    return np.array([np.float_(Decimal(1.) - (
+                                Decimal(theta[1]) + Decimal(theta[2])))])
+
+            cons_sup = ({'type': 'ineq', 'fun': sup_cstr_alpha_beta},
+                        {'type': 'ineq', 'fun': sup_cstr_omega},
+                        {'type': 'ineq', 'fun': sup_cstr_alpha},
+                        {'type': 'ineq', 'fun': sup_cstr_beta})
+        else:
+            raise ValueError
+
+        return cons_sup
+
+    def negative_loglikelihood(self, y, theta, weights=None):
+        if self.dist == "normal":
+            loglikelihood = self.normal_loglikelihood
+        else:
+            raise NotImplementedError(self.dist)
+
+        T = len(y)
+        # Generate the process values
+        y, fitted_values = self.compute_fitted_values(y, np.var(y), theta)
+
+        assert all([s > 0 for s in fitted_values])
+        # compute
+        if weights is None:
+            negll = - 1.0 * sum([
+                loglikelihood(y[t], fitted_values[t]) for t in range(T)
+            ])
+        else:
+            negll = - 1.0 * sum([
+                weights[t] * loglikelihood(y[t], fitted_values[t])
+                for t in range(T)
+            ])
+        return negll
+
+    @staticmethod
     def compute_fitted_values(y, y_hat_0, theta, mu=0.):
         """
 
@@ -145,11 +194,9 @@ class GARCH:
         :param mu:
         :return:
         """
-        if np.mean(y) > 1e-3:
-            LOGGER.warning("Sample does not have a 0 mean. Overwritting with sample mean")
-            mu = np.mean(y)
+        if len(theta) > 3:
+            raise NotImplementedError
 
-        assert len(theta) == 3
         omega = theta[0]
         alpha = theta[1]
         beta = theta[2]

@@ -1,12 +1,15 @@
 {
   "model": {
-    "name": "garch"
+    "name": "garch",
+    "params": {"p":  1, "q":  1}
+  },
+  "preprocessing": {
+    "name": "StandardScaler"
   },
   "generate": "exponential",
   "num_sim": 100,
   "njobs": 8,
-  "min_steps": 2,
-  "max_trial": 1,
-  "search_every": 1,
-  "maxiter": 300
+  "min_steps": 5,
+  "maxtrial": 1,
+  "maxiter": 1000
 }
