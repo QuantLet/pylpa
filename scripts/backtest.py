@@ -84,7 +84,7 @@ if __name__ == "__main__":
     # Otherwise perform test
     # Fit GARCH on interval
     # Predict
-    indices = list(range(min_size, len(returns)))[:11]
+    indices = list(range(min_size, len(returns)))
     pred_dates = dates[indices]
     value_at_risk = np.zeros((len(dates), len(args.quantiles)))
     breakpoints = []
