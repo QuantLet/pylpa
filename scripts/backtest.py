@@ -161,6 +161,6 @@ if __name__ == "__main__":
     ).to_csv(f"{save_dir}/breakpoints.csv", index=False)
 
     # Clean temp files
-    for i in range(c + 1):
+    for i in range(0, c + 1, 10):
         os.remove(f"{save_dir}/res_{i}.csv")
         os.remove(f"{save_dir}/res_breakpoints_{i}.csv")
