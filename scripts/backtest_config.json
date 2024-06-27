@@ -5,6 +5,7 @@
   },
   "data": {
     "path": "data/SP500.xlsx",
+    "feature": "log_returns",
     "preprocessing": {
       "name": "StandardScaler"
     }
@@ -14,7 +15,7 @@
     "num_sim": 100,
     "njobs": 8
   },
-  "min_steps": 5,
+  "min_steps": 1,
   "maxtrial": 1,
   "maxiter": 1000
 }

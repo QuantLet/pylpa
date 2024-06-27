@@ -13,3 +13,15 @@ def build_model_from_config(config):
     else:
         raise NotImplementedError(config["name"])
     return model
+
+
+def build_model_from_config(config):
+    if config["name"] == "arch":
+        model = ARCH(**config["params"])
+    elif config["name"] == "garch":
+        model = GARCH(**config["params"])
+    elif config["name"] == "arma-garch":
+        model = ARMAGARCH(**config["params"])
+    else:
+        raise NotImplementedError(config["name"])
+    return model

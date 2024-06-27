@@ -253,7 +253,7 @@ def generate_interval_indices(
         n_ks = [[int(np.round(N_0 * MULTIPLIER ** (k - 1))),
                  int(np.round(N_0 * MULTIPLIER ** k)),
                  int(np.round(N_0 * MULTIPLIER ** (k + 1)))] for k in
-                range(1, K)]
+                range(1, K+1)]
     else:
         if N + interval_step > MAX_INTERVAL_LENGTH:
             max_int = MAX_INTERVAL_LENGTH + interval_step
@@ -263,6 +263,7 @@ def generate_interval_indices(
         n_ks = [[n_ks[i - 1], n_ks[i], n_ks[i + 1]] for i in
                 range(1, len(n_ks) - 1)]
     return n_ks
+
 
 def find_largest_homogene_interval(
         data: np.ndarray, model_config: dict,  K: Optional[int] = None,
@@ -302,3 +303,4 @@ def find_largest_homogene_interval(
         else:
             index = np.min(res_k['J_k'])
             assert index == res_k['J_k'][-1]
+            return data, -1

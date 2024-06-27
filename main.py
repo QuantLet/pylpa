@@ -72,8 +72,8 @@ if __name__ == "__main__":
     intervals = []
     breaks = []
     while len(left) > N_0*MULTIPLIER**2:
-        if config.get("preprocessing") is not None:
-            if config["preprocessing"]["name"] == "StandardScaler":
+        if config["data"].get("preprocessing") is not None:
+            if config["data"]["preprocessing"]["name"] == "StandardScaler":
                 LOGGER.info(
                     'Centering and reducing to mean 0 and variance 1')
                 # normalize test set with train
@@ -99,13 +99,14 @@ if __name__ == "__main__":
         intervals.append(interval.tolist())
         breaks.append(index)
 
-        plt.plot(left)
-        plt.vlines(index, min(left), max(left), colors="red")
-        plt.savefig(
-            f"{save_dir}/plot_{index}.png", transparent=True,
-            bbox_inches="tight"
-        )
-        plt.close()
+        if index != -1:
+            plt.plot(left)
+            plt.vlines(index, min(left), max(left), colors="red")
+            plt.savefig(
+                f"{save_dir}/plot_{index}.png", transparent=True,
+                bbox_inches="tight"
+            )
+            plt.close()
         left = left[:-len(interval)]
         json.dump(intervals, open(f"{save_dir}/intervals.json", "w"))
         json.dump(breaks, open(f"{save_dir}/breakpoints.json", "w"))

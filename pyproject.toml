@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pre-commit", "black", "isort", "pytest"]
+data = ["openpyxl"]
 
 [tool.black]
 line-length = 79
