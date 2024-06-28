@@ -1,13 +1,10 @@
 import os, json, time
 import datetime as dt
-import pdb
 
 import pandas as pd
 from arch.univariate import arch_model
-from matplotlib import pyplot as plt
 
 from pylpa.data import get_returns_from_prices
-from pylpa.estimators import get_mle_estimator
 from pylpa.logger import get_logger, LOGGER
 
 from pylpa.lpa import find_largest_homogene_interval
@@ -15,7 +12,6 @@ from pylpa.constant import MULTIPLIER, N_0
 
 import numpy as np
 
-from pylpa.models.utils import build_model_from_config
 from pylpa.utils import default_config
 
 
@@ -85,8 +81,7 @@ if __name__ == "__main__":
     # Fit GARCH on interval
     # Predict
     indices = list(range(min_size, len(returns)))
-    pred_dates = dates[indices]
-    value_at_risk = np.zeros((len(dates), len(args.quantiles)))
+    value_at_risk = np.zeros((len(indices), len(args.quantiles)))
     breakpoints = []
     c = 0
     for i in indices:
@@ -142,18 +137,18 @@ if __name__ == "__main__":
             result = pd.DataFrame(
                 value_at_risk[:c,:],
                 columns=[f"q_{q}" for q in args.quantiles],
-                index=dates[:c],
+                index=dates[min_size:i],
             )
             result.to_csv(f"{save_dir}/res_{c}.csv")
             pd.DataFrame(
                 breakpoints, columns=["dates", "index"]
-            ).to_csv(f"{save_dir}/res_breakpoints_{c}.csv")
+            ).to_csv(f"{save_dir}/res_breakpoints_{c}.csv", index=False)
         c += 1
 
     # Save forecasts
     result = pd.DataFrame(
         value_at_risk, columns=[f"q_{q}" for q in args.quantiles],
-        index=dates,
+        index=dates[min_size:c],
     )
     result.to_csv(f"{save_dir}/results.csv")
     pd.DataFrame(

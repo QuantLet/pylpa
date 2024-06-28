@@ -28,7 +28,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # CONFIG ALGO
-    config = json.load(open('config.json', 'r'))
+    config = json.load(open('scripts/demo_config.json', 'r'))
     if "test" in config.keys():
         test = config["test"]
     else:
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     )
 
     # dump config
-    json.dump(config, open('%s/config.json' % save_dir, 'w'))
+    json.dump(config, open('%s/demo_config.json' % save_dir, 'w'))
 
     tc1 = time.time()
     fit_window = {}

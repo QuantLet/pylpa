@@ -1,15 +1,29 @@
 # pyLPA
 This is a python repository implementing the Local Parametric Approach from Spokoiny, V. (2009a).
 
-# Config
+# Scripts
 
-- `min_steps`: int, Mininum distance between two break point test
-- `max_trial`: int, Maximum attempts to estimate MLE
-- `maxiter`: int, Maximum number of iterations to perform to estimate MLE
-- `num_sim`: int, Number of bootstrap simulation
-- `njobs`: int, Number of parallel bootstrap estimation
-- `generate`: str, "exponential" or "normal" distribution of the multiplier 
-  bootstrap weights
+You can find a list of scripts located in the `scripts` folder.
+
+## Scripts parameters:
+
+- `model`: dict, model parameters:
+  - `name`: str, ex: `"garch"`
+  - `params`: dict, ex: `{"p":  1, "q":  1}`
+- `data`: dict, data parameters:
+  - `path`: str, path to the data file
+  - `feature`: str, name of the feature, ex: `"log_returns"`
+  - `preprocessing`: dict, preprocessing configuration, ex: `{"name":
+  "StandardScaler"}`
+- `bootstrap`: dict, parameters for the multiplier bootstratp:
+  - `generate`: str, name of the distribution from which to 
+    generate multiplier bootstrap weights, ex: `normal`
+  - `num_sim`: int, number of simulation
+  - `njobs`: int, number of parallel jobs
+- `min_steps`: int, mininum distance between two break point test
+- `max_trial`: int, maximum attempts to estimate MLE
+- `maxiter`: int, maximum number of iterations to perform to estimate MLE
+
 
 *References*
 
