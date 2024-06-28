@@ -4,7 +4,6 @@
     "params": {"p":  1, "q":  1}
   },
   "data": {
-    "path": "data/SP500.xlsx",
     "preprocessing": {
       "name": "StandardScaler"
     }
