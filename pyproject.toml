@@ -20,7 +20,7 @@ classifiers = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "numpy>=1.26.4",
+    "numpy==1.26.4",
     "arch>=7.0.0",
     "scipy>=1.13.1",
     "statsmodels>=0.14.2",
