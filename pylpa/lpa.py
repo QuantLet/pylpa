@@ -198,9 +198,12 @@ def test_interval(
     test_value = max(T_k)
     critical_value = np.sqrt(2.0 * np.quantile(boot_test, level))
     null_is_true = test_value <= critical_value
-    LOGGER.info('test_value: %s' % test_value)
-    LOGGER.info('critical_value: %s' % critical_value)
-    LOGGER.info('NULL REJECTED: %s' % str(not null_is_true))
+    if np.isnan(critical_value):
+        LOGGER.warning("Critical value is NaN!!")
+    else:
+        LOGGER.info('test_value: %s' % test_value)
+        LOGGER.info('critical_value: %s' % critical_value)
+        LOGGER.info('NULL REJECTED: %s' % str(not null_is_true))
 
     if not null_is_true:
         index = J_k[np.argmax(T_k)]
