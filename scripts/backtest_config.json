@@ -15,7 +15,7 @@
     "num_sim": 100,
     "njobs": 8
   },
-  "min_steps": 10,
+  "min_steps": 5,
   "maxtrial": 1,
   "maxiter": 1000
 }
