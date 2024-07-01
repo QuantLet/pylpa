@@ -148,7 +148,7 @@ if __name__ == "__main__":
     # Save forecasts
     result = pd.DataFrame(
         value_at_risk, columns=[f"q_{q}" for q in args.quantiles],
-        index=dates[min_size:c],
+        index=dates[min_size:],
     )
     result.to_csv(f"{save_dir}/results.csv")
     pd.DataFrame(
