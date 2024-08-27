@@ -175,13 +175,15 @@ def test_interval(
                 bounds=bounds, maxiter=maxiter, generate=generate
             )
 
-        # results = []
-        # for i in range(num_sim):
-        #     r = runner(i)
-        #     results.append(r)
-        results = Parallel(
-            n_jobs=njobs
-        )(delayed(runner)(i) for i in range(num_sim))
+        if njobs == 1:
+            results = []
+            for i in range(num_sim):
+                r = runner(i)
+                results.append(r)
+        else:
+            results = Parallel(
+                n_jobs=njobs
+            )(delayed(runner)(i) for i in range(num_sim))
         T_k_b[counter, :] = results
 
     t1b = time.time()
