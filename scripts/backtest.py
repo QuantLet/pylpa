@@ -14,6 +14,7 @@ import numpy as np
 
 from pylpa.utils import default_config
 
+from scipy import stats
 
 if __name__ == "__main__":
     import argparse
@@ -82,6 +83,7 @@ if __name__ == "__main__":
     # Predict
     indices = list(range(min_size, len(returns)))
     value_at_risk = np.zeros((len(indices), len(args.quantiles)))
+    expected_shortfall = np.zeros((len(indices), len(args.quantiles)))
     breakpoints = []
     c = 0
     for i in indices:
@@ -125,32 +127,51 @@ if __name__ == "__main__":
         cond_mean = forecasts.mean
         cond_var = forecasts.variance
         q = am.distribution.ppf(args.quantiles)
-        VaR = -cond_mean.values - np.sqrt(cond_var).values * q[None, :]
+        VaR = (cond_mean.values + np.sqrt(cond_var).values * q[None, :])
+        if am.distribution.name == "Normal":
+            ES = stats.norm.pdf(q) * 1/args.quantiles
+            ES = (cond_mean.values + np.sqrt(cond_var).values * ES[None, :])
+        else:
+            raise NotImplementedError
         if config["data"].get("preprocessing") is not None:
             if config["data"]["preprocessing"]["name"] == "StandardScaler":
                 VaR *= std_
                 VaR += mean_
+                ES *= std_
+                ES += mean_
             else:
                 raise NotImplementedError(config["preprocessing"])
-        value_at_risk[c, :] = VaR
+        value_at_risk[c, :] = - VaR
+        expected_shortfall[c, :] = ES
+
         if c % 10 == 0:
-            result = pd.DataFrame(
-                value_at_risk[:c,:],
-                columns=[f"q_{q}" for q in args.quantiles],
-                index=dates[min_size:i],
+            res_VaR = pd.DataFrame(
+                value_at_risk, columns=[f"VaR_{q}" for q in args.quantiles],
+                index=dates[min_size:],
             )
-            result.to_csv(f"{save_dir}/res_{c}.csv")
+            res_ES = pd.DataFrame(
+                expected_shortfall,
+                columns=[f"ES_{q}" for q in args.quantiles],
+                index=dates[min_size:],
+            )
+            results = pd.concat([res_VaR, res_ES], axis=1)
+            results.to_csv(f"{save_dir}/res_{c}.csv")
             pd.DataFrame(
                 breakpoints, columns=["dates", "index"]
             ).to_csv(f"{save_dir}/res_breakpoints_{c}.csv", index=False)
         c += 1
 
     # Save forecasts
-    result = pd.DataFrame(
-        value_at_risk, columns=[f"q_{q}" for q in args.quantiles],
+    res_VaR = pd.DataFrame(
+        value_at_risk, columns=[f"VaR_{q}" for q in args.quantiles],
         index=dates[min_size:],
     )
-    result.to_csv(f"{save_dir}/results.csv")
+    res_ES = pd.DataFrame(
+        expected_shortfall, columns=[f"ES_{q}" for q in args.quantiles],
+        index=dates[min_size:],
+    )
+    results = pd.concat([res_VaR, res_ES], axis=1)
+    results.to_csv(f"{save_dir}/results.csv")
     pd.DataFrame(
         breakpoints, columns=["dates", "index"]
     ).to_csv(f"{save_dir}/breakpoints.csv", index=False)
